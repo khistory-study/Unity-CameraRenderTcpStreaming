@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using UnityEngine;
 
 /// <summary>
@@ -11,16 +10,15 @@ using UnityEngine;
 /// </summary>
 public class BytesTcpClient : MonoBehaviour {  	
 	private readonly int _messageByteLength = 24;
-	private readonly int _port = 56666;
-	
-	private TcpClient _tcpClient; 	
-	//private Thread _recvThread; 	
 
 	private string _ip = "127.0.0.1";
-	private int _tryTimeInterval = 3;
+	private int _port = 56666;
+	private int _connectTryInterval = 3;
 
 	private byte[] _sendBytes;
-	private bool _isConnected = false;
+
+	private TcpClient _tcpClient;
+	private bool _isConnected;
 
 	private void Awake()
 	{
@@ -29,7 +27,7 @@ public class BytesTcpClient : MonoBehaviour {
 
 	private void OnEnable()
 	{
-		StartCoroutine(StartTryConnectLoop(_tryTimeInterval));
+		StartCoroutine(StartTryConnectLoop(_connectTryInterval));
 		StartCoroutine(SendLoop());
 	}
 
@@ -44,35 +42,34 @@ public class BytesTcpClient : MonoBehaviour {
 
 		if (!_isConnected)
 			return;
-
+		
+		if(bytes == null) 
+			return;
+		
 		_sendBytes = bytes;
 	}
 
-	public void ConnectToServer(string targetIp)
+	public void ConnectToServer(string targetIp, int port)
 	{
 		_ip = targetIp;
+		_port = port;
 
 		if (string.IsNullOrEmpty(_ip))
 			return;
 		
-		QuitClientAndThread();
-
-		Loom.RunAsync(ConnectToServer);
-		
-		// _recvThread = new Thread (ConnectToServer); 			
-		// _recvThread.IsBackground = true; 			
-		// _recvThread.Start();
-		Debug.Log($"◆◇◇(1)미러링TCP - Thread restart ((info)ip:{_ip}/port:{_port}))");
+		QuitClient();
+		Debug.Log($"◆◇◇(1)미러링TCP - ThreadStart ((info)ip:{_ip}/port:{_port}))");
+		Loom.RunAsync(ConnectAndWait);
 	}  	
 	
 	private IEnumerator StartTryConnectLoop(int interval)
 	{
 		while (true)
 		{
-			if (!_isConnected)
-				ConnectToServer(_ip);
-			
 			yield return new WaitForSeconds(interval);
+			
+			if (!_isConnected)
+				ConnectToServer(_ip, _port);
 		}
 	}
 
@@ -128,6 +125,19 @@ public class BytesTcpClient : MonoBehaviour {
             }
         }
     }
+	
+	private void ReadLoop()
+	{
+		while (true)
+		{
+			if (_isConnected) return;
+        
+        
+			NetworkStream serverStream = _tcpClient.GetStream();
+			byte[] imageBytesCount = new byte[4];
+		}
+	}
+	
     
     void ByteLengthToFrameByteArray(int byteLength, byte[] fullBytes) {
 	    Array.Clear(fullBytes, 0, fullBytes.Length);
@@ -135,7 +145,7 @@ public class BytesTcpClient : MonoBehaviour {
 	    bytesToSendCount.CopyTo(fullBytes, 0);
     }
 
-    private void ConnectToServer() {
+    private void ConnectAndWait() {
 		try { 			
 			_isConnected = false;
 			_tcpClient = new TcpClient();
@@ -149,7 +159,7 @@ public class BytesTcpClient : MonoBehaviour {
 		}     
 	}
 
-	private void QuitClientAndThread()
+	private void QuitClient()
 	{
 		try
 		{
@@ -162,6 +172,6 @@ public class BytesTcpClient : MonoBehaviour {
 
 	private void OnApplicationQuit()
 	{
-		QuitClientAndThread();
+		QuitClient();
 	}
 }

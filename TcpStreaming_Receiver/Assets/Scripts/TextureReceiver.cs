@@ -1,8 +1,11 @@
 using System.Collections;
 using UnityEngine;
 
-public class CamTextureReceiver : MonoBehaviour
+public class TextureReceiver : MonoBehaviour
 {
+    [Header("Settings")] 
+    public int port = 56666;
+    
     [Header("ReceivedTexture")]
     public Texture2D receivedTexture;
     private BytesTcpServer _bytesTcpServer;
@@ -11,15 +14,15 @@ public class CamTextureReceiver : MonoBehaviour
 
     private void Start()
     {
-        BeginReceiver();
+        Init();
     }
 
-    private void BeginReceiver()
+    private void Init()
     {
+        //Create Server
         if (_bytesTcpServer == null)
             _bytesTcpServer = gameObject.AddComponent<BytesTcpServer>();
-        
-        _bytesTcpServer.onRecv = ProcessImageData; 
+        _bytesTcpServer.BeginServer(port, ProcessImageData);
         
         //server의 데이터 읽는 속도를 체크하여 화질 저하
         StartCoroutine(ServerDelayCheckLoop());
@@ -52,7 +55,7 @@ public class CamTextureReceiver : MonoBehaviour
     
     private void CheckServerDelay()
     {
-        if (_bytesTcpServer.streamDelay > _thresholdToReduceRes)
+        if (_bytesTcpServer.delayAvg > _thresholdToReduceRes)
             _defaultResScale -= 0.05f;
         else
             _defaultResScale += 0.05f;

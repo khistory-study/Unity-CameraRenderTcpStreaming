@@ -4,7 +4,7 @@ using UnityEngine.UI;
 [RequireComponent(typeof(RawImage))]
 public class CamTextureRawImage : MonoBehaviour
 {
-    public CamTextureReceiver receiver;
+    public TextureReceiver receiver;
 
     private RawImage _rawImage;
 
