@@ -20,8 +20,9 @@ public class BytesTcpClient : MonoBehaviour {
 	private TcpClient _tcpClient;
 	private bool _isConnected;
 
-	private float _streamDelay;
 	private float _lastWriteTime = float.MaxValue;
+
+	public float StreamDelay { get; private set; }
 
 	private void Awake()
 	{
@@ -168,13 +169,12 @@ public class BytesTcpClient : MonoBehaviour {
 			
 			if (!disconnected)
 			{
-				_streamDelay = BitConverter.ToSingle(delayBytes, 0);
-				_streamDelay = (float)Math.Round(_streamDelay, 4);
-				Debug.Log(_streamDelay);
+				StreamDelay = BitConverter.ToSingle(delayBytes, 0);
+				StreamDelay = (float)Math.Round(StreamDelay, 4);
 			}
 			else
 			{
-				_streamDelay = 0;
+				StreamDelay = 0;
 			}
 		}
 	}

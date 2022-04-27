@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Net.Sockets;
 using UnityEngine;
 
 public class TextureSender : MonoBehaviour
@@ -11,6 +10,8 @@ public class TextureSender : MonoBehaviour
     [Header("Network")]
     public string ip = "127.0.0.1";
     public int port = 56666;
+    public float streamDelayBoundary = 0.1f;
+    public float streamDelayCheckSeconds = 0.5f;
 
     [Header("Settings")] 
     public int quality = 70;
@@ -32,7 +33,9 @@ public class TextureSender : MonoBehaviour
     private void OnEnable()
     {
         BeginSender(specificCam, ip, port, defaultResolutionType);
+        
         StartCoroutine(UpdateTextureLoop());
+        StartCoroutine(StreamDelayCheckLoop());
     }
 
     private void OnDisable()
@@ -40,7 +43,7 @@ public class TextureSender : MonoBehaviour
         StopAllCoroutines();
     }
 
-    private void BeginSender(Camera cam, string targetIp, int targetPort, ResolutionType resType = ResolutionType.p720, float customResWidth = 100, float customResHeight = 100)
+    public void BeginSender(Camera cam, string targetIp, int targetPort, ResolutionType resType = ResolutionType.p720, float customResWidth = 100, float customResHeight = 100)
     {
         defaultResolutionType = resType;
         specificCam = cam;
@@ -92,6 +95,20 @@ public class TextureSender : MonoBehaviour
                 }
                 yield return null;
             }
+        }
+    }
+
+    IEnumerator StreamDelayCheckLoop()
+    {
+        while (true)
+        {
+            if (_bytesTcpClient.StreamDelay >= streamDelayBoundary)
+                resolutionMulti -= 0.01f;
+            else
+                resolutionMulti += 0.01f;
+            
+            resolutionMulti = Mathf.Clamp(resolutionMulti, 0.1f, 1);
+            yield return new WaitForSeconds(streamDelayCheckSeconds);
         }
     }
 

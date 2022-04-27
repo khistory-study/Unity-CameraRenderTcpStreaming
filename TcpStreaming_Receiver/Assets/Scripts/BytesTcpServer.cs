@@ -3,11 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net; 
 using System.Net.Sockets; 
-using System.Threading;
 using UnityEngine;  
 
 public class BytesTcpServer : MonoBehaviour {
-	public Action<byte[]> onBytesRecv;
 	public float delayAvg;
 	public bool isConnected = false;
 
@@ -21,20 +19,19 @@ public class BytesTcpServer : MonoBehaviour {
 	private Queue<float> _readDelayQueue = new Queue<float>();
 	private int _readDelayCheckCountMax = 10;
 
-	private Action<float> onRenewDelay;
-
+	private Action<byte[]> _onBytesRecv;
+	private Action<bool> _onConnected;
+	
 	private void Awake()
 	{
 		Loom.Initialize();
-		onRenewDelay += WriteDelayValue;
 	}
 
-	public void BeginServer(int port, Action<byte[]> bytesRecvAction)
+	public void BeginServer(int port, Action<byte[]> bytesRecvAction = null, Action<bool> onConnected = null)
 	{
 		_port = port;
-		onBytesRecv -= bytesRecvAction;
-		onBytesRecv += bytesRecvAction;
-		
+		_onBytesRecv = bytesRecvAction;
+		_onConnected = onConnected;
 		EndServer();
 		Loom.RunAsync(ReadLoop);
 	}
@@ -49,8 +46,10 @@ public class BytesTcpServer : MonoBehaviour {
 			{
 				Debug.Log($"◆◆◇(2)미러링TCP - 클라이언트 접속을 대기 중...(port:{_port})");
 				isConnected = false;
+				_onConnected?.Invoke(false);
 				_connectedClient = _tcpListener.AcceptTcpClient();
 				isConnected = true;
+				_onConnected?.Invoke(true);
 				Debug.Log($"◆◆◆(3)미러링TCP - 클라이언트 연결 완료...(port:{_port})");
 
 				while (true)
@@ -69,12 +68,12 @@ public class BytesTcpServer : MonoBehaviour {
 						ReadFrameByteArray(imageSize, _connectedClient);
 					
 						//Read Write Interval
-						float sendInterval = ReadSendInterval(4, _connectedClient);
+						float clientFpsInterval = ReadSendInterval(4, _connectedClient);
 						
 						Loom.QueueOnMainThread(() =>
 						{
-							delayAvg = CalculateDelayValue(streamReadTime, sendInterval);
-							WriteDelayValue(delayAvg);
+							delayAvg = CalculateDelayValue(streamReadTime, clientFpsInterval);
+							SendDelayValueToClient(delayAvg);
 						});
 					}
 					catch (Exception e)
@@ -103,7 +102,7 @@ public class BytesTcpServer : MonoBehaviour {
 		return ret;
 	}
 
-	private void WriteDelayValue(float delay)
+	private void SendDelayValueToClient(float delay)
 	{
 		if (!isConnected)
 			return;
@@ -164,7 +163,7 @@ public class BytesTcpServer : MonoBehaviour {
 		//Display Image
 		if (!disconnected) {
 			_recvBytes = imageBytes;
-			Loom.QueueOnMainThread(() => onBytesRecv?.Invoke(_recvBytes));
+			Loom.QueueOnMainThread(() => _onBytesRecv?.Invoke(_recvBytes));
 		}
 	}
 	
@@ -185,7 +184,10 @@ public class BytesTcpServer : MonoBehaviour {
 			total += read;
 		} while (total != size);
 
-		return BitConverter.ToSingle(imageBytes, 0);
+		if (disconnected)
+			return 0;
+		else
+			return BitConverter.ToSingle(imageBytes, 0);
 	}
 
 	//Converts the byte array to the data size and returns the result
