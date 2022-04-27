@@ -21,9 +21,12 @@ public class BytesTcpServer : MonoBehaviour {
 	private Queue<float> _readDelayQueue = new Queue<float>();
 	private int _readDelayCheckCountMax = 10;
 
+	private Action<float> onRenewDelay;
+
 	private void Awake()
 	{
 		Loom.Initialize();
+		onRenewDelay += WriteDelayValue;
 	}
 
 	public void BeginServer(int port, Action<byte[]> bytesRecvAction)
@@ -65,19 +68,13 @@ public class BytesTcpServer : MonoBehaviour {
 						//Read Image Bytes and Display it
 						ReadFrameByteArray(imageSize, _connectedClient);
 					
-						
+						//Read Write Interval
+						float sendInterval = ReadSendInterval(4, _connectedClient);
 						
 						Loom.QueueOnMainThread(() =>
 						{
-							_readDelayQueue.Enqueue(Time.time - streamReadTime);
-							if (_readDelayQueue.Count > _readDelayCheckCountMax)
-								_readDelayQueue.Dequeue();
-							delayAvg = _readDelayQueue.Average();
-							
-							//Sender쪽에서는 30fps, 즉 30/60 = 0.05f; 초에 한 번 보냄
-							//대략 streamReadDelay = 0.05초에 하나씩 받게 되고;
-							//즉 0.05초 초과된 시간이 Write or Read의 딜레이가 포함된 시간
-							delayAvg =Mathf.Clamp(delayAvg- 0.05f, 0, 10);
+							delayAvg = CalculateDelayValue(streamReadTime, sendInterval);
+							WriteDelayValue(delayAvg);
 						});
 					}
 					catch (Exception e)
@@ -91,7 +88,30 @@ public class BytesTcpServer : MonoBehaviour {
 		catch (SocketException socketException) { 			
 			Debug.Log("◇◇◇(-1)미러링TCP - SocketException " + socketException);
 		}     
-	}  	
+	}
+
+	private float CalculateDelayValue(float streamReadTime, float sendInterval)
+	{
+		float ret = 0;
+		
+		_readDelayQueue.Enqueue(Time.time - streamReadTime);
+		if (_readDelayQueue.Count > _readDelayCheckCountMax)
+			_readDelayQueue.Dequeue();
+		ret = _readDelayQueue.Average();
+		ret = Mathf.Clamp((float)Math.Round(ret, 4) - sendInterval, 0, 10);
+		
+		return ret;
+	}
+
+	private void WriteDelayValue(float delay)
+	{
+		if (!isConnected)
+			return;
+			
+		NetworkStream stream = _connectedClient.GetStream();
+		byte[] delayBytes = BitConverter.GetBytes(delay);
+		stream.Write(delayBytes, 0, delayBytes.Length);
+	}
 	
 	private int ReadImageByteSize(int size, TcpClient client) {
 		bool disconnected = false;
@@ -146,6 +166,26 @@ public class BytesTcpServer : MonoBehaviour {
 			_recvBytes = imageBytes;
 			Loom.QueueOnMainThread(() => onBytesRecv?.Invoke(_recvBytes));
 		}
+	}
+	
+	private float ReadSendInterval(int size, TcpClient client)
+	{
+		bool disconnected = false;
+		NetworkStream serverStream = client.GetStream();
+		byte[] imageBytes = new byte[size];
+		
+		var total = 0;
+		do {
+			var read = serverStream.Read(imageBytes, total, size - total); 
+			if (read == 0)
+			{
+				disconnected = true;
+				break;
+			}
+			total += read;
+		} while (total != size);
+
+		return BitConverter.ToSingle(imageBytes, 0);
 	}
 
 	//Converts the byte array to the data size and returns the result

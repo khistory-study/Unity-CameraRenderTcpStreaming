@@ -3,11 +3,12 @@ using UnityEngine;
 
 public class TextureReceiver : MonoBehaviour
 {
-    [Header("Settings")] 
+    [Header("Network")] 
     public int port = 56666;
     
     [Header("ReceivedTexture")]
     public Texture2D receivedTexture;
+    
     private BytesTcpServer _bytesTcpServer;
     private float _defaultResScale = 1; 
     private float _thresholdToReduceRes = 0.2f; //0.2초 딜레이 발생시 해상도 낮추기

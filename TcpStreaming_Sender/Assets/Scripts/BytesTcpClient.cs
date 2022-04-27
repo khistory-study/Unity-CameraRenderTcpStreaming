@@ -20,9 +20,13 @@ public class BytesTcpClient : MonoBehaviour {
 	private TcpClient _tcpClient;
 	private bool _isConnected;
 
+	private float _streamDelay;
+	private float _lastWriteTime = float.MaxValue;
+
 	private void Awake()
 	{
 		Loom.Initialize();
+		Loom.RunAsync(ReadLoop);
 	}
 
 	private void OnEnable()
@@ -76,6 +80,7 @@ public class BytesTcpClient : MonoBehaviour {
 	IEnumerator SendLoop() {
 	    bool readyToGetFrame = true;
         byte[] frameBytesLength = new byte[_messageByteLength];
+        float timeInterval = 0.1f;
 
         while (true)
         {
@@ -99,14 +104,24 @@ public class BytesTcpClient : MonoBehaviour {
 	            try
 	            {
 		            NetworkStream stream = _tcpClient.GetStream();
+		            Loom.QueueOnMainThread(() =>
+		            {
+			            timeInterval = Time.time - _lastWriteTime;
+			            timeInterval = (float)Math.Round(timeInterval, 4);
+		            });
+		            
 		            //Send total byte count first
 		            stream.Write(frameBytesLength, 0, frameBytesLength.Length);
 		            //Send the image bytes
 		            stream.Write(sendBytes, 0, sendBytes.Length);
+		            //Send write interval;
+		            byte[] timeIntervalBytes = BitConverter.GetBytes(timeInterval);
+		            stream.Write(timeIntervalBytes, 0, timeIntervalBytes.Length);
 		            //clear sendBytes
 		            _sendBytes = null;
 		            //Sent. Set readyToGetFrame true
 		            readyToGetFrame = true;
+		            Loom.QueueOnMainThread(() => { _lastWriteTime = Time.time; });
 	            }
 	            catch (Exception e)
 	            {
@@ -130,11 +145,37 @@ public class BytesTcpClient : MonoBehaviour {
 	{
 		while (true)
 		{
-			if (_isConnected) return;
-        
-        
-			NetworkStream serverStream = _tcpClient.GetStream();
-			byte[] imageBytesCount = new byte[4];
+			if (!_isConnected) continue;
+			
+			NetworkStream stream = _tcpClient.GetStream();
+			
+			bool disconnected = false;
+			int floatByteSize = 4;
+			int total = 0;
+			
+			byte[] delayBytes = new byte[floatByteSize];
+
+			do
+			{
+				var read = stream.Read(delayBytes, total, floatByteSize - total);
+				if (read == 0)
+				{
+					disconnected = true;
+					break;
+				}
+				total += read;
+			} while (total != floatByteSize);
+			
+			if (!disconnected)
+			{
+				_streamDelay = BitConverter.ToSingle(delayBytes, 0);
+				_streamDelay = (float)Math.Round(_streamDelay, 4);
+				Debug.Log(_streamDelay);
+			}
+			else
+			{
+				_streamDelay = 0;
+			}
 		}
 	}
 	

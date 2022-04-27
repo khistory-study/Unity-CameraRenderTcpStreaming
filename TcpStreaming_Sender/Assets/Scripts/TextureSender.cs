@@ -19,6 +19,7 @@ public class TextureSender : MonoBehaviour
     public TargetCamType targetCamType = TargetCamType.MainCam;
     public ResolutionType defaultResolutionType = ResolutionType.p720;
     public Camera specificCam;
+    
     private Camera mainMirrorCam;
 
     private Vector2 _customRes = new Vector2(1080, 720);
@@ -30,7 +31,7 @@ public class TextureSender : MonoBehaviour
     
     private void OnEnable()
     {
-        BeginSender(specificCam, ip, port, ResolutionType.p720);
+        BeginSender(specificCam, ip, port, defaultResolutionType);
         StartCoroutine(UpdateTextureLoop());
     }
 
@@ -50,8 +51,6 @@ public class TextureSender : MonoBehaviour
         _bytesTcpClient.ConnectToServer(targetIp, targetPort);
     }
     
-    private 
-
     IEnumerator UpdateTextureLoop()
     {
         float nextUpdateTime = 0f;
@@ -67,6 +66,7 @@ public class TextureSender : MonoBehaviour
                     if(resolutionMulti <= 0) continue;
                     
                     yield return new WaitForEndOfFrame();
+                    
                     try
                     {
                         UpdateResolution();
@@ -100,6 +100,7 @@ public class TextureSender : MonoBehaviour
         if (Camera.main == null) return;
         if (mainMirrorCam == null)
         {
+            //create mirrorCam
             GameObject camObj = new GameObject("sender's mainCam");
             camObj.transform.SetParent(Camera.main.transform);
             camObj.transform.localPosition = Vector3.zero;
